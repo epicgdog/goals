@@ -1,4 +1,5 @@
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: goals_db
@@ -12,6 +13,57 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./server/migrations:/docker-entrypoint-initdb.d
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goals_user -d goals_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend API Server
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: goals_backend
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=goals_tracker
+      - DB_USER=goals_user
+      - DB_PASSWORD=goals_password
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  # Expo Frontend (optional - can also run locally)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: goals_frontend
+    ports:
+      - "8081:8081"
+      - "19000:19000"
+      - "19001:19001"
+      - "19002:19002"
+    env_file:
+      - .env
+    environment:
+      - EXPO_PUBLIC_API_URL=http://host.docker.internal:3001
+    volumes:
+      - .:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
 
 volumes:
   postgres_data:
